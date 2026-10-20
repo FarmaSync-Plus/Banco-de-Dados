@@ -1,7 +1,9 @@
-use cadastro_usuarios;
-select * from usuarios;
+CREATE DATABASE IF NOT EXISTS cadastro_usuarios CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE cadastro_usuarios;
 
-create table Usuarios(
+-- select * from usuarios;
+
+CREATE TABLE IF NOT EXISTS Usuarios(
 usuario_id int  auto_increment primary key ,
 nome_usuario varchar(25) not null,
 CPF char(11) not null unique,
@@ -19,14 +21,14 @@ data_de_nasc date
 );
 
 
-insert into Usuarios(nome_usuario,CPF,genero,logradouro,bairro,Cidade,estado,cep,email_usuario,senha_usuario,data_de_nasc) values('Marcos',1223343,'Masculino', 'Rua das Alamedas 12','Vale dos Lírios','São Paulo','SP','01753252','marcos@gmail.com','1234567','1985-02-09');
+insert into Usuarios(nome_usuario,CPF,genero,logradouro,bairro,Cidade,estado,cep,email_usuario,senha_usuario,data_de_nasc) values('Marcos','00122334001','Masculino', 'Rua das Alamedas 12','Vale dos Lírios','São Paulo','SP','01753252','marcos@gmail.com','1234567','1985-02-09');
 
-truncate Usuarios; -- truncate serve para apagar os registros do banco de dados sem alterar a estrutura
+-- truncate Usuarios; -- truncate serve para apagar os registros do banco de dados sem alterar a estrutura
 select * from Usuarios;
-drop table usuarios;
-alter table Usuarios drop peso;
+-- drop table usuarios;
+-- alter table Usuarios drop peso;
 
-CREATE TABLE categorias (
+CREATE TABLE IF NOT EXISTS categorias (
     id_categoria INT AUTO_INCREMENT PRIMARY KEY,
     nome VARCHAR(50) NOT NULL
 );
@@ -38,7 +40,7 @@ INSERT INTO categorias (nome) VALUES
 ('Infantil'),
 ('Beleza');
 
-CREATE TABLE produtos (
+CREATE TABLE IF NOT EXISTS produtos (
     id_produto INT AUTO_INCREMENT PRIMARY KEY,
     nome VARCHAR(100) NOT NULL,
     descricao TEXT,
@@ -133,47 +135,75 @@ VALUES
 
 
 
+-- SELECT * FROM produtos;
 
+-- Remove somente a estrutura antiga de pedidos, que tinha colunas incompatíveis
+-- (pedidos_id, peso, estoque_atual e produto_id).
+SET FOREIGN_KEY_CHECKS = 0;
+DROP TABLE IF EXISTS pedido_itens;
+DROP TABLE IF EXISTS pedidos;
+SET FOREIGN_KEY_CHECKS = 1;
+
+CREATE TABLE pedidos (
+    pedido_id INT AUTO_INCREMENT PRIMARY KEY,
+    usuario_id INT NOT NULL,
+    pagamento ENUM ('Cartão de Crédito', 'Boleto Bancário', 'PIX') NOT NULL,
+    valor_total DECIMAL(10,2) NOT NULL,
+    status ENUM ('Pendente', 'Confirmado', 'Em preparação', 'Enviado', 'Entregue', 'Cancelado') NOT NULL DEFAULT 'Pendente',
+    data_pedido DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    pedido_atualizacao DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_pedidos_usuario FOREIGN KEY (usuario_id) REFERENCES Usuarios(usuario_id),
+    CONSTRAINT ck_pedidos_valor_total CHECK (valor_total > 0),
+    INDEX ix_pedidos_usuario (usuario_id),
+    INDEX ix_pedidos_status (status)
+);
+
+CREATE TABLE pedido_itens (
+    pedido_item_id INT AUTO_INCREMENT PRIMARY KEY,
+    pedido_id INT NOT NULL,
+    id_produto INT NOT NULL,
+    nome_produto VARCHAR(100) NOT NULL,
+    preco_unitario DECIMAL(10,2) NOT NULL,
+    quantidade INT NOT NULL,
+    subtotal DECIMAL(10,2) NOT NULL,
+    CONSTRAINT fk_itens_pedido FOREIGN KEY (pedido_id) REFERENCES pedidos(pedido_id) ON DELETE CASCADE,
+    CONSTRAINT fk_itens_produto FOREIGN KEY (id_produto) REFERENCES produtos(id_produto),
+    CONSTRAINT ck_itens_quantidade CHECK (quantidade > 0),
+    CONSTRAINT ck_itens_preco CHECK (preco_unitario >= 0),
+    INDEX ix_itens_pedido (pedido_id),
+    INDEX ix_itens_produto (id_produto)
+);
+
+SELECT 'Banco configurado para a API FarmaSync' AS resultado;
+
+SELECT pedido_id, status FROM pedidos
+ORDER BY pedido_id DESC;
+
+USE cadastro_usuarios;
+
+SELECT * FROM usuarios;
 
 SELECT * FROM produtos;
 
+SELECT * FROM pedidos
+ORDER BY pedido_id DESC;
 
-create table pedidos (
-    pedidos_id INT AUTO_INCREMENT PRIMARY KEY,
-    usuario_id INT,
-    id_produto INT, 
-    nome VARCHAR (100) NOT NULL,
-    peso DECIMAL (4,2) NOT NULL,
-    pagamento ENUM ('Cartão de Crédito', 'Boleto Bancário', 'PIX') NOT NULL,
-    valor_total DECIMAL(10,2) NOT NULL CHECK(valor_total > 0),
-    quantidade_pedido INT NOT NULL,
-    data_pedido DATETIME DEFAULT CURRENT_TIMESTAMP,
-    pedido_atualizacao DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (usuario_id) REFERENCES Usuarios(usuario_id),
-    FOREIGN KEY (id_produto) REFERENCES Produtos(id_produto)
-);
+SELECT * FROM pedido_itens
+ORDER BY pedido_item_id DESC;
 
-
-delimiter //
-create trigger atualizacao
-after insert on pedidos
-for each row
-begin
-update Produtos
-    set estoque_atual = estoque_atual - new.quantidade_pedido
-    where produto_id = new.produto_id;
-end; //
-
-delimiter ;
-
-insert into Produtos (nome_produto, estoque_atual, preco_unitario)
-values ('Buscopam 20mg', 100, 25.50);
-
-insert into Produtos (nome_produto, estoque_atual, preco_unitario)
-values ('Dipirona monoidratada', 125, 12.00);
-
-select * from pedidos;
-
-select nome_produto, estoque_atual from Produtos;
-drop table pedidos
+SELECT
+p.pedido_id,
+p.usuario_id,
+p.pagamento,
+p.valor_total,
+p.status,
+p.data_pedido,
+i.nome_produto,
+i.preco_unitario,
+i.quantidade,
+i.subtotal
+FROM pedidos p
+INNER JOIN pedido_itens i
+ON i.pedido_id = p.pedido_id
+ORDER BY p.pedido_id DESC;
 
